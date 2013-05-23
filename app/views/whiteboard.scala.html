@@ -1,0 +1,35 @@
+@(presenter: String, username: String)
+
+@main(username) {
+	<h1>whiteboard session</h1>
+    
+    <div id="fooo"></div>
+    <div id="messages"></div>
+    <img id="image"/>
+    
+    <script type="text/javascript" charset="utf-8">
+    
+        $(function() {
+            var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
+            		
+	        var socket = new WS("@routes.Application.viewer(presenter, username).webSocketURL(request)")
+            var receiveEvent = function(event) {
+//             	$("#fooo").text(event.data)
+            	var data = JSON.parse(event.data)
+            	if(data.kind == "error") {
+                    socket.close()
+                    $("#messages").text(data.kind + ": " + data.data)
+                    return
+                } else if(data.kind == "sendImage") {
+                	document.getElementById("image").src="data:image/png;base64," + data.data;
+                } else {
+                	$("#messages").text("unkown kind: " + data.kind + ": " + data.data)
+                }
+            }
+            socket.onmessage = receiveEvent
+            
+        })
+    
+    </script>
+    
+}
