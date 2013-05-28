@@ -46,23 +46,31 @@ public class Session extends UntypedActor {
 
 				@Override
 				public void invoke(JsonNode event) throws Throwable {
-
-					String part = event.get("data").asText();
-
-					base64string = part + base64string;
-
-					if ((event.get("last").asText()).equals("1")) {
-						byte[] imageInBytes = Base64.decode(base64string);
+					
+					if (event.get("type").asText().equals("image")) {
 						
-						FileOutputStream fos = new FileOutputStream("foobar.jpg");
-						fos.write(imageInBytes);
-						fos.close();
-						Logger.info("done saving image");
-						session.tell(new SendImage(presenterName, base64string));
-						Logger.info("length: " + base64string.length());
-
-						base64string = "";
+						String part = event.get("data").asText();
+						
+						base64string = part + base64string;
+						
+						if ((event.get("last").asText()).equals("1")) {
+							byte[] imageInBytes = Base64.decode(base64string);
+							
+//							FileOutputStream fos = new FileOutputStream("foobar.jpg");
+//							fos.write(imageInBytes);
+//							fos.close();
+//							Logger.info("done saving image");
+							session.tell(new SendImage(presenterName, base64string));
+//							Logger.info("length: " + base64string.length());
+							
+							base64string = "";
+						}
+					} else if (event.get("type").asText().equals("cursor")) {
+						int x = event.get("x").asInt();
+						int y = event.get("y").asInt();
+						session.tell(new SendCursor(presenterName, x, y));
 					}
+
 
 				}
 			});
@@ -171,12 +179,19 @@ public class Session extends UntypedActor {
 			Logger.info("allSessions.size: " + allSessions.size());
 			
 		} else if (message instanceof SendImage) {
-			Logger.info("onReceive: SendImage");
+//			Logger.info("onReceive: SendImage");
 
 			// Received a Talk message
 			SendImage sendImage = (SendImage) message;
 
 			notifyAll("sendImage", sendImage.username, sendImage.text);
+		} else if (message instanceof SendCursor) {
+//			Logger.info("onReceive: SendCursor");
+			
+			// Received a Talk message
+			SendCursor sendCursor = (SendCursor) message;
+			
+			updateCursor("sendCursor", sendCursor.username, sendCursor.x, sendCursor.y);
 
 		} else if (message instanceof Quit) {
 			Logger.info("onReceive: Quit");
@@ -212,22 +227,31 @@ public class Session extends UntypedActor {
 
 	private void notifyAll(String kind, String presenter, String text) {
 		//TODO
-		Logger.info("notifyAll kind: " + kind + " user: " + presenter);
+//		Logger.info("notifyAll kind: " + kind + " user: " + presenter);
 		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
 			ObjectNode event = Json.newObject();
 			event.put("kind", kind);
             event.put("presenter", presenter);
             event.put("data", text);
             
-//            ArrayNode m = event.putArray("members");
-//            for(String u: viewers.keySet()) {
-//                m.add(u);
-//            }
-            
             viewer.write(event);
 			
 		}
 		
+	}
+	
+	private void updateCursor(String kind, String presenter, int x, int y) {
+//		Logger.info("updateCursor kind: " + kind + " user: " + presenter + " " + x + " " + y);
+		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
+			ObjectNode event = Json.newObject();
+			event.put("kind", kind);
+            event.put("presenter", presenter);
+            event.put("x", x);
+            event.put("y", y);
+            
+            viewer.write(event);
+			
+		}
 	}
 
 	// -- Messages
@@ -266,6 +290,20 @@ public class Session extends UntypedActor {
 			this.text = text;
 		}
 
+	}
+	
+	public static class SendCursor {
+		
+		final String username;
+		final int x;
+		final int y;
+		
+		public SendCursor(String username, int x, int y) {
+			this.username = username;
+			this.x = x;
+			this.y = y;
+		}
+		
 	}
 
 	public static class Quit {

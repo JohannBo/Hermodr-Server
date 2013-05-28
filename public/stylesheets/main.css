@@ -1,0 +1,12 @@
+.outsideWrapper{ 
+
+}
+.insideWrapper{ 
+    position:relative;
+}
+.coveredImage{ 
+    position:absolute; top:0px; left:0px;
+}
+.coveringCanvas{ 
+    position:absolute; top:0px; left:0px;
+}
