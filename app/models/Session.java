@@ -3,7 +3,6 @@ package models;
 import static akka.pattern.Patterns.ask;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import java.io.FileOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,16 +19,15 @@ import akka.actor.Props;
 import akka.actor.UntypedActor;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ning.http.util.Base64;
-
 
 public class Session extends UntypedActor {
 	
 	private static Map<String, ActorRef> allSessions = new HashMap<String, ActorRef>();
 	
 	private Map<String, WebSocket.Out<JsonNode>> viewers = new HashMap<String, WebSocket.Out<JsonNode>>();
+	
+	private String[][] imageStrings = new String[20][20];
 	
 	private String presenterName;
 	
@@ -54,13 +52,13 @@ public class Session extends UntypedActor {
 						base64string = part + base64string;
 						
 						if ((event.get("last").asText()).equals("1")) {
-							byte[] imageInBytes = Base64.decode(base64string);
+//							byte[] imageInBytes = Base64.decode(base64string);
 							
 //							FileOutputStream fos = new FileOutputStream("foobar.jpg");
 //							fos.write(imageInBytes);
 //							fos.close();
 //							Logger.info("done saving image");
-							session.tell(new SendImage(presenterName, base64string));
+							session.tell(new SendImage(base64string, event.get("x").asInt(), event.get("y").asInt()));
 //							Logger.info("length: " + base64string.length());
 							
 							base64string = "";
@@ -68,7 +66,7 @@ public class Session extends UntypedActor {
 					} else if (event.get("type").asText().equals("cursor")) {
 						int x = event.get("x").asInt();
 						int y = event.get("y").asInt();
-						session.tell(new SendCursor(presenterName, x, y));
+						session.tell(new SendCursor(x, y));
 					}
 
 
@@ -158,8 +156,9 @@ public class Session extends UntypedActor {
 				getSender().tell("This username is already used");
 			} else {
 				Logger.info("onReceive: Join: " + join.username + "has entered the room: " + this.presenterName);
-				viewers.put(join.username, join.session);
+				viewers.put(join.username, join.viewer);
 				Logger.info(presenterName + ".size: " + viewers.size());
+				sendCompleteImage(join.viewer);
 				getSender().tell("OK");
 			}
 
@@ -184,14 +183,14 @@ public class Session extends UntypedActor {
 			// Received a Talk message
 			SendImage sendImage = (SendImage) message;
 
-			notifyAll("sendImage", sendImage.username, sendImage.text);
+			updateImage(sendImage.text, sendImage.x, sendImage.y);
 		} else if (message instanceof SendCursor) {
 //			Logger.info("onReceive: SendCursor");
 			
 			// Received a Talk message
 			SendCursor sendCursor = (SendCursor) message;
 			
-			updateCursor("sendCursor", sendCursor.username, sendCursor.x, sendCursor.y);
+			updateCursor(sendCursor.x, sendCursor.y);
 
 		} else if (message instanceof Quit) {
 			Logger.info("onReceive: Quit");
@@ -206,10 +205,7 @@ public class Session extends UntypedActor {
 		} else if (message instanceof PresenterQuit) {
 			Logger.info("onReceive: PresenterQuit");
 			
-			// Received a Quit message
-			PresenterQuit presenterQuit = (PresenterQuit) message;
-			
-			notifyAll("error", "system", "The Screencast has been ended by the Presenter");
+			notifyAll("error", "The Screencast has been ended by the Presenter");
 			
 			for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
 				viewer.close();
@@ -225,27 +221,53 @@ public class Session extends UntypedActor {
 
 	}
 
-	private void notifyAll(String kind, String presenter, String text) {
+	private void notifyAll(String kind, String text) {
 		//TODO
 //		Logger.info("notifyAll kind: " + kind + " user: " + presenter);
 		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
 			ObjectNode event = Json.newObject();
 			event.put("kind", kind);
-            event.put("presenter", presenter);
             event.put("data", text);
             
             viewer.write(event);
-			
+					
+		}
+	}
+	
+	private void sendCompleteImage(WebSocket.Out<JsonNode> viewer) {
+		
+		for (int x = 0; x < imageStrings.length; x++) {
+			for (int y = 0; y < imageStrings[x].length; y++) {
+				if (imageStrings[x][y] != null) {
+					ObjectNode event = Json.newObject();
+					event.put("kind", "sendImage");
+					event.put("x", x);
+					event.put("y", y);
+					event.put("data", imageStrings[x][y]);
+					viewer.write(event);
+				}
+			}
 		}
 		
 	}
 	
-	private void updateCursor(String kind, String presenter, int x, int y) {
+	private void updateImage(String text, int x, int y) {
+		imageStrings[x][y] = text;
+		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
+			ObjectNode event = Json.newObject();
+			event.put("kind", "sendImage");
+			event.put("x", x);
+			event.put("y", y);
+			event.put("data", text);
+			viewer.write(event);
+		}
+	}
+	
+	private void updateCursor(int x, int y) {
 //		Logger.info("updateCursor kind: " + kind + " user: " + presenter + " " + x + " " + y);
 		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
 			ObjectNode event = Json.newObject();
-			event.put("kind", kind);
-            event.put("presenter", presenter);
+			event.put("kind", "sendCursor");
             event.put("x", x);
             event.put("y", y);
             
@@ -253,17 +275,17 @@ public class Session extends UntypedActor {
 			
 		}
 	}
-
+	
 	// -- Messages
 
 	public static class Join {
 
 		final String username;
-		final WebSocket.Out<JsonNode> session;
+		final WebSocket.Out<JsonNode> viewer;
 
 		public Join(String username, WebSocket.Out<JsonNode> session) {
 			this.username = username;
-			this.session = session;
+			this.viewer = session;
 		}
 
 	}
@@ -282,24 +304,24 @@ public class Session extends UntypedActor {
 
 	public static class SendImage {
 
-		final String username;
 		final String text;
+		final int x;
+		final int y;
 
-		public SendImage(String username, String text) {
-			this.username = username;
+		public SendImage(String text, int x, int y) {
 			this.text = text;
+			this.x = x;
+			this.y = y;
 		}
 
 	}
 	
 	public static class SendCursor {
 		
-		final String username;
 		final int x;
 		final int y;
 		
-		public SendCursor(String username, int x, int y) {
-			this.username = username;
+		public SendCursor(int x, int y) {
 			this.x = x;
 			this.y = y;
 		}
