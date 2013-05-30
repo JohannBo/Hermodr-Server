@@ -23,11 +23,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class Session extends UntypedActor {
 	
+	private static final int gridSize = 20;
+	
 	private static Map<String, ActorRef> allSessions = new HashMap<String, ActorRef>();
 	
 	private Map<String, WebSocket.Out<JsonNode>> viewers = new HashMap<String, WebSocket.Out<JsonNode>>();
 	
-	private String[][] imageStrings = new String[20][20];
+	private String[][] imageStrings = new String[gridSize][gridSize];
 	
 	private String presenterName;
 	

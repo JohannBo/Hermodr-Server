@@ -10,6 +10,8 @@ import views.html.*;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class Application extends Controller {
+	
+
 
     public static Result index() {
     	Logger.info("Application.index()");

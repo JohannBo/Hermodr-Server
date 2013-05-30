@@ -12,10 +12,10 @@
     position:absolute; top:0px; left:0px;
 }
 
-table {
+#imagetable {
     position:absolute; top:0px; left:0px;
     border-collapse: collapse;
 }
-th, td {
+.imagetablerow, .imagetabledata {
     padding: 0;
 }
