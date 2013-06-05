@@ -3,6 +3,9 @@
 @main(username) {
 	<h1>whiteboard session</h1>
 
+
+<audio id="audioPlayer" type="audio/ogg" controls="true"></audio>
+
 <div id="messages"></div>
 
 <div class="outsideWrapper">
@@ -19,6 +22,13 @@
 </div>
 
 <script type="text/javascript" charset="utf-8">
+
+// 	function playSound() {
+// 		var player = document.getElementById("audioPlayer");
+// 		player.src = "assets/test3.ogg"
+// 		player.play();
+// 	}
+// 	playSound();
 
 	var gridSize = 20;
 
@@ -39,8 +49,31 @@
 
 
 	$(function() {
-		var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket
-
+		var WS = window['MozWebSocket'] ? MozWebSocket : WebSocket;
+		
+		var player = document.getElementById("audioPlayer");
+		var audioQueue = new Queue()
+		
+		var playAudio = function(audio) {
+			if(audioQueue.isEmpty()) {
+				player.pause();
+				player.src = "data:audio/ogg;base64," + audio;
+// 				player.src = "/assets/" + audio;
+				player.play();
+			} else {
+				audioQueue.enqueue(audio);
+			}
+		}
+		player.addEventListener('ended', function(){
+			if(!audioQueue.isEmpty()) {
+				player.pause();
+				var audio = audioQueue.dequeue(); 
+				player.src = "data:audio/ogg;base64," + audio;
+// 				player.src = "/assets/" + audio;
+				player.play();
+			}
+		}, false);
+				
 		var c = document.getElementById("canvas");
 		var ctx = c.getContext("2d");
 		var cursorx = 0;
@@ -70,12 +103,14 @@
 				if (c.width != document.getElementById("imageX0Y0").width * gridSize) {
 					updateCursor();
 				}
+			} else if (data.kind == "sendAudio") {
+				playAudio(data.data);
 			} else if (data.kind == "sendCursor") {
 				cursorx = data.x;
 				cursory = data.y;
 				updateCursor();
 			} else {
-				$("#messages").text("unkown kind: " + data.kind + ": " + data.data)
+				$("#messages").text("unkown kind: " + data.kind + ": " + data.data);
 			}
 		}
 		

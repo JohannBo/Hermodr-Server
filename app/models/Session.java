@@ -3,6 +3,7 @@ package models;
 import static akka.pattern.Patterns.ask;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import java.io.FileOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,6 +21,7 @@ import akka.actor.UntypedActor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ning.http.util.Base64;
 
 public class Session extends UntypedActor {
 	
@@ -42,7 +44,9 @@ public class Session extends UntypedActor {
 			
 			// For each event received on the socket,
 			in.onMessage(new Callback<JsonNode>() {
-				String base64string = "";
+				String imageString = "";
+				String audioString = "";
+				int imageNr = 0;
 
 				@Override
 				public void invoke(JsonNode event) throws Throwable {
@@ -51,19 +55,31 @@ public class Session extends UntypedActor {
 						
 						String part = event.get("data").asText();
 						
-						base64string = part + base64string;
+						imageString = part + imageString;
 						
 						if ((event.get("last").asText()).equals("1")) {
-//							byte[] imageInBytes = Base64.decode(base64string);
 							
-//							FileOutputStream fos = new FileOutputStream("foobar.jpg");
+							session.tell(new SendImage(imageString, event.get("x").asInt(), event.get("y").asInt()));
+							
+							imageString = "";
+						}
+					} else if (event.get("type").asText().equals("audio")) {
+						String part = event.get("data").asText();
+
+						audioString = part + audioString;
+
+						if ((event.get("last").asText()).equals("1")) {
+//							byte[] imageInBytes = Base64.decode(audioString);
+//
+//							String filename = presenterName + "Nr" + imageNr++ + ".ogg";
+//							FileOutputStream fos = new FileOutputStream("public/" + filename);
 //							fos.write(imageInBytes);
 //							fos.close();
-//							Logger.info("done saving image");
-							session.tell(new SendImage(base64string, event.get("x").asInt(), event.get("y").asInt()));
-//							Logger.info("length: " + base64string.length());
-							
-							base64string = "";
+
+//							session.tell(new SendAudio(filename));
+							session.tell(new SendAudio(audioString));
+
+							audioString = "";
 						}
 					} else if (event.get("type").asText().equals("cursor")) {
 						int x = event.get("x").asInt();
@@ -186,6 +202,13 @@ public class Session extends UntypedActor {
 			SendImage sendImage = (SendImage) message;
 
 			updateImage(sendImage.text, sendImage.x, sendImage.y);
+		} else if (message instanceof SendAudio) {
+//			Logger.info("onReceive: SendAudio");
+			
+			// Received a Talk message
+			SendAudio sendAudio = (SendAudio) message;
+			
+			updateAudio(sendAudio.text);
 		} else if (message instanceof SendCursor) {
 //			Logger.info("onReceive: SendCursor");
 			
@@ -265,6 +288,15 @@ public class Session extends UntypedActor {
 		}
 	}
 	
+	private void updateAudio(String text) {
+		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
+			ObjectNode event = Json.newObject();
+			event.put("kind", "sendAudio");
+			event.put("data", text);
+			viewer.write(event);
+		}
+	}
+	
 	private void updateCursor(int x, int y) {
 //		Logger.info("updateCursor kind: " + kind + " user: " + presenter + " " + x + " " + y);
 		for (WebSocket.Out<JsonNode> viewer : viewers.values()) {
@@ -316,6 +348,16 @@ public class Session extends UntypedActor {
 			this.y = y;
 		}
 
+	}
+	
+	public static class SendAudio {
+		
+		final String text;
+		
+		public SendAudio(String text) {
+			this.text = text;
+		}
+		
 	}
 	
 	public static class SendCursor {
