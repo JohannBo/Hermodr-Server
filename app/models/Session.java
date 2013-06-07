@@ -3,7 +3,6 @@ package models;
 import static akka.pattern.Patterns.ask;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import java.io.FileOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +20,6 @@ import akka.actor.UntypedActor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.ning.http.util.Base64;
 
 public class Session extends UntypedActor {
 	
@@ -46,8 +44,8 @@ public class Session extends UntypedActor {
 			in.onMessage(new Callback<JsonNode>() {
 				String imageString = "";
 				String audioString = "";
-				int imageNr = 0;
 
+				@SuppressWarnings("deprecation")
 				@Override
 				public void invoke(JsonNode event) throws Throwable {
 					
@@ -69,14 +67,7 @@ public class Session extends UntypedActor {
 						audioString = part + audioString;
 
 						if ((event.get("last").asText()).equals("1")) {
-//							byte[] imageInBytes = Base64.decode(audioString);
-//
-//							String filename = presenterName + "Nr" + imageNr++ + ".ogg";
-//							FileOutputStream fos = new FileOutputStream("public/" + filename);
-//							fos.write(imageInBytes);
-//							fos.close();
 
-//							session.tell(new SendAudio(filename));
 							session.tell(new SendAudio(audioString));
 
 							audioString = "";
@@ -93,6 +84,7 @@ public class Session extends UntypedActor {
 
 			// When the socket is closed.
 			in.onClose(new Callback0() {
+				@SuppressWarnings("deprecation")
 				public void invoke() {
 
 					// Send a Quit message to the room.
@@ -114,13 +106,13 @@ public class Session extends UntypedActor {
 		}
 	}
 	
-	public static void joinSession(final String presenterName, String username, WebSocket.In<JsonNode> in, WebSocket.Out<JsonNode> out) throws Exception {
+	public static void joinSession(final String presenterName, final String username, WebSocket.In<JsonNode> in, WebSocket.Out<JsonNode> out) throws Exception {
 		Logger.info("joinSession presenterName: " + presenterName + " username: " + username);
 		
-		String result;
+		String result = null;
+		final ActorRef session = allSessions.get(presenterName);
 		
 		if (allSessions.containsKey(presenterName)) {
-			ActorRef session = allSessions.get(presenterName);
 			result = (String)Await.result(ask(session,new Join(username, out), 1000), Duration.create(1, SECONDS));
 		} else {
 			result = "The Session you requested doesn't exist.";
@@ -140,10 +132,10 @@ public class Session extends UntypedActor {
 
 			// When the socket is closed.
 			in.onClose(new Callback0() {
+				@SuppressWarnings("deprecation")
 				public void invoke() {
-
 					// Send a Quit message to the room.
-//					session.tell(new Quit(presenterName));
+					session.tell(new Quit(username));
 
 				}
 			});
@@ -160,6 +152,7 @@ public class Session extends UntypedActor {
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public void onReceive(Object message) throws Exception {
 
